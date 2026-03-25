@@ -1,0 +1,32 @@
+id: atlas_ingestion
+namespace: dev.finance
+
+description: Ingests daily OHLC data for a list of ETFs using yfinance and stores as CSV.
+
+tasks:
+  - id: collect_history
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.13-slim
+    beforeCommands:
+      - pip install yfinance pandas kestra
+    outputFiles:
+      - "etf_history.csv"
+    script: |
+      import yfinance as yf
+      import pandas as pd
+      from kestra import Kestra
+
+      etfs = ["SPY", "QQQ", "TLT", "GLD", "HYG"]
+      period = "5d"
+      interval = "1d"
+
+      history = yf.download(etfs, period=period, interval=interval)
+
+      history.columns = ["_".join(col).strip() for col in history.columns.values]
+      history = history.reset_index()
+
+      history.to_csv("etf_history.csv", index=False)
+
+      Kestra.outputs({"rows": len(history), "tickers": str(etfs)})
