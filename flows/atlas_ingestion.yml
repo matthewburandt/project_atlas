@@ -16,17 +16,85 @@ tasks:
     script: |
       import yfinance as yf
       import pandas as pd
+      from datetime import datetime, timedelta
       from kestra import Kestra
 
+      execution_date = datetime.fromisoformat("{{execution.startDate | date('yyyy-MM-dd')}}")
+      # start = execution_date.strftime('%Y-%m-%d')
+      start = datetime(2026, 3, 23)
+      # end = (execution_date + timedelta(days=1)).strftime('%Y-%m-%d')
+      end = datetime(2026, 3, 26)
+
       etfs = ["SPY", "QQQ", "TLT", "GLD", "HYG"]
-      period = "5d"
+      
       interval = "1d"
 
-      history = yf.download(etfs, period=period, interval=interval)
+      history = yf.download(etfs, start=start, end=end, interval=interval)
 
       history.columns = ["_".join(col).strip() for col in history.columns.values]
+      history = history.rename(columns={'Date': 'trade_date'})
       history = history.reset_index()
 
       history.to_csv("etf_history.csv", index=False)
 
       Kestra.outputs({"rows": len(history), "tickers": str(etfs)})
+
+  - id: upload_to_gcs
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{outputs.collect_history.outputFiles['etf_history.csv']}}"
+    to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
+
+  - id: bq_etf_ohlc
+    type: io.kestra.plugin.gcp.bigquery.Query
+    sql: |
+          CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.etf_ohlc`
+          (
+              trade_date DATE OPTIONS (description = 'Date on which the trade occurred.'),
+              Close_GLD FLOAT64 OPTIONS (description = 'The closing price of GLD on the given date.'),      
+              Close_HYG FLOAT64 OPTIONS (description = 'The closing price of HYG on the given date.'),
+              Close_QQQ FLOAT64 OPTIONS (description = 'The closing price of QQQ on the given date.'),
+              Close_SPY FLOAT64 OPTIONS (description = 'The closing price of SPY on the given date.'),
+              Close_TLT FLOAT64 OPTIONS (description = 'The closing price of TLT on the given date.'),
+              High_GLD FLOAT64 OPTIONS (description = 'The highest price of GLD on the given date.'),
+              High_HYG FLOAT64 OPTIONS (description = 'The highest price of HYG on the given date.'),
+              High_QQQ FLOAT64 OPTIONS (description = 'The highest price of QQQ on the given date.'),
+              High_SPY FLOAT64 OPTIONS (description = 'The highest price of SPY on the given date.'),
+              High_TLT FLOAT64 OPTIONS (description = 'The highest price of TLT on the given date.'),
+              Low_GLD FLOAT64 OPTIONS (description = 'The lowest price of GLD on the given date.'),
+              Low_HYG FLOAT64 OPTIONS (description = 'The lowest price of HYG on the given date.'),
+              Low_QQQ FLOAT64 OPTIONS (description = 'The lowest price of QQQ on the given date.'),
+              Low_SPY FLOAT64 OPTIONS (description = 'The lowest price of SPY on the given date.'),
+              Low_TLT FLOAT64 OPTIONS (description = 'The lowest price of TLT on the given date.'),
+              Open_GLD FLOAT64 OPTIONS (description = 'The opening price of GLD on the given date.'),
+              Open_HYG FLOAT64 OPTIONS (description = 'The opening price of HYG on the given date.'),
+              Open_QQQ FLOAT64 OPTIONS (description = 'The opening price of QQQ on the given date.'),
+              Open_SPY FLOAT64 OPTIONS (description = 'The opening price of SPY on the given date.'),
+              Open_TLT FLOAT64 OPTIONS (description = 'The opening price of TLT on the given date.'),
+              Volume_GLD INT64 OPTIONS (description = 'The volume of GLD traded on the given date.'),
+              Volume_HYG INT64 OPTIONS (description = 'The volume of HYG traded on the given date.'),
+              Volume_QQQ INT64 OPTIONS (description = 'The volume of QQQ traded on the given date.'),
+              Volume_SPY INT64 OPTIONS (description = 'The volume of SPY traded on the given date.'),
+              Volume_TLT INT64 OPTIONS (description = 'The volume of TLT traded on the given date.')
+          )
+          PARTITION BY trade_date;
+  - id: bq_load_etf_ohlc
+    type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
+    from:
+      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
+    destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.etf_ohlc"
+    format: CSV
+    csvOptions:
+      skipLeadingRows: 1
+    writeDisposition: WRITE_APPEND
+pluginDefaults:
+  - type: io.kestra.plugin.gcp
+    values:
+      serviceAccount: "{{secret('GCP_SERVICE_ACCOUNT')}}"
+      projectId: "{{kv('GCP_PROJECT_ID')}}"
+      location: "{{kv('GCP_LOCATION')}}"
+      bucket: "{{kv('GCP_BUCKET_NAME')}}"
+
+triggers:
+  - id: etf_schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 16 * * 1-5"
