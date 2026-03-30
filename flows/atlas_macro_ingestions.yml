@@ -14,7 +14,7 @@ tasks:
     outputFiles:
       - "macro_data.csv"
     script: |
-      import fredapi as Fred
+      from fredapi import Fred
       import pandas as pd
       from datetime import datetime, timedelta
       from kestra import Kestra
@@ -24,9 +24,9 @@ tasks:
 
       # Data series names
       series = {
-          "GDP": "Gross Domestic Product",
-          "CPIAUCSL": "Consumer Price Index for All Urban Consumers: All Items",
-          "UNRATE": "Unemployment Rate"
+          "GDP": "Gross_Domestic_Product",
+          "CPIAUCSL": "CPI",
+          "UNRATE": "Unemployment_Rate"
       }
 
       # Fetch data for the last 3 years
@@ -49,55 +49,34 @@ tasks:
     from: "{{outputs.collect_history.outputFiles['macro_data.csv']}}"
     to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
 
-#   - id: bq_etf_ohlc
-#     type: io.kestra.plugin.gcp.bigquery.Query
-#     sql: |
-#           CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.etf_ohlc`
-#           (
-#               trade_date DATE OPTIONS (description = 'Date on which the trade occurred.'),
-#               Close_GLD FLOAT64 OPTIONS (description = 'The closing price of GLD on the given date.'),      
-#               Close_HYG FLOAT64 OPTIONS (description = 'The closing price of HYG on the given date.'),
-#               Close_QQQ FLOAT64 OPTIONS (description = 'The closing price of QQQ on the given date.'),
-#               Close_SPY FLOAT64 OPTIONS (description = 'The closing price of SPY on the given date.'),
-#               Close_TLT FLOAT64 OPTIONS (description = 'The closing price of TLT on the given date.'),
-#               High_GLD FLOAT64 OPTIONS (description = 'The highest price of GLD on the given date.'),
-#               High_HYG FLOAT64 OPTIONS (description = 'The highest price of HYG on the given date.'),
-#               High_QQQ FLOAT64 OPTIONS (description = 'The highest price of QQQ on the given date.'),
-#               High_SPY FLOAT64 OPTIONS (description = 'The highest price of SPY on the given date.'),
-#               High_TLT FLOAT64 OPTIONS (description = 'The highest price of TLT on the given date.'),
-#               Low_GLD FLOAT64 OPTIONS (description = 'The lowest price of GLD on the given date.'),
-#               Low_HYG FLOAT64 OPTIONS (description = 'The lowest price of HYG on the given date.'),
-#               Low_QQQ FLOAT64 OPTIONS (description = 'The lowest price of QQQ on the given date.'),
-#               Low_SPY FLOAT64 OPTIONS (description = 'The lowest price of SPY on the given date.'),
-#               Low_TLT FLOAT64 OPTIONS (description = 'The lowest price of TLT on the given date.'),
-#               Open_GLD FLOAT64 OPTIONS (description = 'The opening price of GLD on the given date.'),
-#               Open_HYG FLOAT64 OPTIONS (description = 'The opening price of HYG on the given date.'),
-#               Open_QQQ FLOAT64 OPTIONS (description = 'The opening price of QQQ on the given date.'),
-#               Open_SPY FLOAT64 OPTIONS (description = 'The opening price of SPY on the given date.'),
-#               Open_TLT FLOAT64 OPTIONS (description = 'The opening price of TLT on the given date.'),
-#               Volume_GLD INT64 OPTIONS (description = 'The volume of GLD traded on the given date.'),
-#               Volume_HYG INT64 OPTIONS (description = 'The volume of HYG traded on the given date.'),
-#               Volume_QQQ INT64 OPTIONS (description = 'The volume of QQQ traded on the given date.'),
-#               Volume_SPY INT64 OPTIONS (description = 'The volume of SPY traded on the given date.'),
-#               Volume_TLT INT64 OPTIONS (description = 'The volume of TLT traded on the given date.')
-#           )
-#           PARTITION BY trade_date;
-#   - id: bq_load_etf_ohlc
-#     type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
-#     from:
-#       - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
-#     destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.etf_ohlc"
-#     format: CSV 
-#     csvOptions:
-#       skipLeadingRows: 1
-#     writeDisposition: WRITE_APPEND
-# pluginDefaults:
-#   - type: io.kestra.plugin.gcp
-#     values:
-#       serviceAccount: "{{secret('GCP_SERVICE_ACCOUNT')}}"
-#       projectId: "{{kv('GCP_PROJECT_ID')}}"
-#       location: "{{kv('GCP_LOCATION')}}"
-#       bucket: "{{kv('GCP_BUCKET_NAME')}}"
+  - id: bq_macro
+    type: io.kestra.plugin.gcp.bigquery.Query
+    sql: |
+          CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data`
+          (
+              trade_date DATE OPTIONS (description = 'Date on which the trade occurred.'),
+              Gross_Domestic_Product FLOAT64 OPTIONS (description = 'Gross Domestic Product on a XX basis.'),      
+              CPI FLOAT64 OPTIONS (description = 'CPI level on a XX basis'),
+              Unemployment_Rate FLOAT64 OPTIONS (description = 'Level of unemployment observed on XX date')
+          )
+          PARTITION BY trade_date;
+  - id: bq_load_macro
+    type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
+    from:
+      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
+    destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data"
+    format: CSV 
+    csvOptions:
+      skipLeadingRows: 1
+    writeDisposition: WRITE_APPEND
+    
+pluginDefaults:
+  - type: io.kestra.plugin.gcp
+    values:
+      serviceAccount: "{{secret('GCP_SERVICE_ACCOUNT')}}"
+      projectId: "{{kv('GCP_PROJECT_ID')}}"
+      location: "{{kv('GCP_LOCATION')}}"
+      bucket: "{{kv('GCP_BUCKET_NAME')}}"
 
 # triggers:
 #   - id: etf_schedule
