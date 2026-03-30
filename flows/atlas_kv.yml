@@ -25,3 +25,9 @@ tasks:
     key: GCP_DATASET
     kvType: STRING
     value: fund_data
+  
+  - id: fred_api_key
+    type: io.kestra.plugin.core.kv.Set
+    key: FRED_API_KEY
+    kvType: STRING
+    value: d1a4e88cb84c34808b5c07e2e62b61ec # TODO replace with your actual FRED API key
