@@ -19,19 +19,16 @@ tasks:
       from datetime import datetime, timedelta
       from kestra import Kestra
 
-      # Initialize FRED client
       fred = Fred(api_key="{{kv('FRED_API_KEY')}}")
 
-      # Data series names
       series = {
           "GDP": "Gross_Domestic_Product",
           "CPIAUCSL": "CPI",
           "UNRATE": "Unemployment_Rate"
       }
 
-      # Fetch data for the last 3 years
       end_date = datetime.today()
-      start_date = end_date - timedelta(days=365*3)
+      start_date = end_date - timedelta(days=35) # last ~month of data
 
       history = pd.DataFrame()
       for code, name in series.items():
@@ -40,7 +37,8 @@ tasks:
           df.index.name = "Date"
           history = pd.concat([history, df], axis=1)
 
-      history.to_csv("macro_data.csv", index=False)
+      history.index.name = "trade_date"
+      history.to_csv("macro_data.csv")
 
       Kestra.outputs({"rows": len(history), "series": str(list(series.keys()))})
 
@@ -49,27 +47,34 @@ tasks:
     from: "{{outputs.collect_history.outputFiles['macro_data.csv']}}"
     to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
 
+  - id: bq_create_dataset
+    type: io.kestra.plugin.gcp.bigquery.CreateDataset
+    name: "{{kv('GCP_MACRO_DATASET')}}"
+    ifExists: SKIP
+
   - id: bq_macro
     type: io.kestra.plugin.gcp.bigquery.Query
     sql: |
-          CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data`
-          (
-              trade_date DATE OPTIONS (description = 'Date on which the trade occurred.'),
-              Gross_Domestic_Product FLOAT64 OPTIONS (description = 'Gross Domestic Product on a XX basis.'),      
-              CPI FLOAT64 OPTIONS (description = 'CPI level on a XX basis'),
-              Unemployment_Rate FLOAT64 OPTIONS (description = 'Level of unemployment observed on XX date')
-          )
-          PARTITION BY trade_date;
+      CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data`
+      (
+          trade_date DATE OPTIONS (description = 'Observation date.'),
+          Gross_Domestic_Product FLOAT64,
+          CPI FLOAT64,
+          Unemployment_Rate FLOAT64
+      )
+      PARTITION BY trade_date;
+
+
   - id: bq_load_macro
     type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
     from:
       - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
     destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data"
-    format: CSV 
+    format: CSV
     csvOptions:
       skipLeadingRows: 1
     writeDisposition: WRITE_APPEND
-    
+
 pluginDefaults:
   - type: io.kestra.plugin.gcp
     values:
@@ -78,7 +83,7 @@ pluginDefaults:
       location: "{{kv('GCP_LOCATION')}}"
       bucket: "{{kv('GCP_BUCKET_NAME')}}"
 
-# triggers:
-#   - id: etf_schedule
-#     type: io.kestra.plugin.core.trigger.Schedule
-#     cron: "0 16 * * 1-5"
+triggers:
+  - id: macro_monthly_schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 1 * *"  # 1st of every month at 9am UTC

@@ -25,6 +25,12 @@ tasks:
     key: GCP_DATASET
     kvType: STRING
     value: fund_data
+
+  - id: gcp_macro_dataset
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_MACRO_DATASET
+    kvType: STRING
+    value: macro_data
   
   - id: fred_api_key
     type: io.kestra.plugin.core.kv.Set
