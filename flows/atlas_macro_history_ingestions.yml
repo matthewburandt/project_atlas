@@ -1,4 +1,4 @@
-id: atlas_macro_ingestion
+id: atlas_macro_history_ingestion
 namespace: dev.finance
 
 description: Ingests macro data from FRED API and stores as CSV.
@@ -27,22 +27,26 @@ tasks:
           "DFF": "Fed_Funds_Rate",
           "BAMLH0A0HYM2": "High_Yield_Spread",
           "VIXCLS": "VIX",
-          "T10YINTR": "Inflation_Expectations_10Y",
+          "T10YIE": "Inflation_Expectations_10Y",
           "CPIAUCSL": "CPI",
           "UNRATE": "Unemployment_Rate"
       }
 
       # Set the date range for the data collection
-      period = timedelta(days=35) # last ~month of data
+      period = timedelta(weeks=26) # last 6-months of data
       end_date = datetime.today()
       start_date = end_date - period
 
       history = pd.DataFrame()
       for code, name in series.items():
-          data = fred.get_series(code, observation_start=start_date, observation_end=end_date)
-          df = pd.DataFrame(data, columns=[name])
-          df.index.name = "Date"
-          history = pd.concat([history, df], axis=1)
+          try:
+            data = fred.get_series(code, observation_start=start_date, observation_end=end_date)
+            df = pd.DataFrame(data, columns=[name])
+            df.index.name = "Date"
+            history = pd.concat([history, df], axis=1)
+          except ValueError as e:
+            print(f'Failed on series: {code} - {e}')
+            raise
 
       history.index.name = "trade_date"
       history.to_csv("macro_data.csv")
@@ -93,8 +97,3 @@ pluginDefaults:
       projectId: "{{kv('GCP_PROJECT_ID')}}"
       location: "{{kv('GCP_LOCATION')}}"
       bucket: "{{kv('GCP_BUCKET_NAME')}}"
-
-triggers:
-  - id: macro_monthly_schedule
-    type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 9 1 * *"  # 1st of every month at 9am UTC
