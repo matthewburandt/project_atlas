@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: fund_data
+    database: project-atlas-491202
+    schema: fund_data
+    tables:
+      - name: etf_ohlc
+
+  - name: macro_data
+    database: project-atlas-491202
+    schema: macro_data
+    tables:
+      - name: macro_data
