@@ -1,3 +1,15 @@
+with deduped as (
+    select *,
+        row_number() over (partition by trade_date order by trade_date) as rn
+    from {{ source('fund_data', 'etf_ohlc') }}
+),
+
+final as (
+    select * except(rn)
+    from deduped
+    where rn = 1
+)
+
 select
     trade_date,
 
@@ -36,4 +48,4 @@ select
     Close_TLT       as tlt_close,
     Volume_TLT      as tlt_volume
 
-from {{ source('fund_data', 'etf_ohlc') }}
+from final
