@@ -27,14 +27,15 @@ tasks:
           "DFF": "Fed_Funds_Rate",
           "BAMLH0A0HYM2": "High_Yield_Spread",
           "VIXCLS": "VIX",
-          "T10YINTR": "Inflation_Expectations_10Y",
+          "T10YIE": "Inflation_Expectations_10Y",
           "CPIAUCSL": "CPI",
           "UNRATE": "Unemployment_Rate"
       }
 
       # Set the date range for the data collection
       period = timedelta(days=35) # last ~month of data
-      end_date = datetime.today()
+      execution_date = datetime.fromisoformat("{{execution.startDate | date('yyyy-MM-dd')}}")
+      end_date = execution_date
       start_date = end_date - period
 
       history = pd.DataFrame()

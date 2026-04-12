@@ -20,7 +20,7 @@ tasks:
       from kestra import Kestra
 
       execution_date = datetime.fromisoformat("{{execution.startDate | date('yyyy-MM-dd')}}")
-      start = (execution_date - timedelta(days=1)).strftime('%Y-%m-%d')
+      start = (execution_date - timedelta(days=4)).strftime('%Y-%m-%d')
       end = execution_date.strftime('%Y-%m-%d')
 
       etfs = ["SPY", "QQQ", "TLT", "GLD", "HYG"]
@@ -95,4 +95,4 @@ pluginDefaults:
 triggers:
   - id: etf_schedule
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 16 * * 5"
+    cron: "0 16 * * 1,4" # Every Monday and Thursday at 4 PM (assuming market closes at 4 PM)
