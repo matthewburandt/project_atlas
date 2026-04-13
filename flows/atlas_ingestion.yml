@@ -19,8 +19,8 @@ tasks:
       from datetime import datetime, timedelta
       from kestra import Kestra
 
-      execution_date = datetime.fromisoformat("{{execution.startDate | date('yyyy-MM-dd')}}")
-      start = (execution_date - timedelta(days=4)).strftime('%Y-%m-%d')
+      execution_date = datetime.fromisoformat("{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}")
+      start = (execution_date - timedelta(days=3)).strftime('%Y-%m-%d')
       end = execution_date.strftime('%Y-%m-%d')
 
       etfs = ["SPY", "QQQ", "TLT", "GLD", "HYG"]
@@ -40,7 +40,7 @@ tasks:
   - id: upload_to_gcs
     type: io.kestra.plugin.gcp.gcs.Upload
     from: "{{outputs.collect_history.outputFiles['etf_history.csv']}}"
-    to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
+    to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
 
   - id: bq_etf_ohlc
     type: io.kestra.plugin.gcp.bigquery.Query
@@ -78,7 +78,7 @@ tasks:
   - id: bq_load_etf_ohlc
     type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
     from:
-      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
+      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/etf/{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}/etf_history.csv"
     destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.etf_ohlc"
     format: CSV
     csvOptions:

@@ -33,8 +33,8 @@ tasks:
       }
 
       # Set the date range for the data collection
-      period = timedelta(days=35) # last ~month of data
-      execution_date = datetime.fromisoformat("{{execution.startDate | date('yyyy-MM-dd')}}")
+      period = timedelta(days=31) # last ~month of data
+      execution_date = datetime.fromisoformat("{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}")
       end_date = execution_date
       start_date = end_date - period
 
@@ -53,7 +53,7 @@ tasks:
   - id: upload_to_gcs
     type: io.kestra.plugin.gcp.gcs.Upload
     from: "{{outputs.collect_history.outputFiles['macro_data.csv']}}"
-    to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
+    to: "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
 
   - id: bq_create_dataset
     type: io.kestra.plugin.gcp.bigquery.CreateDataset
@@ -80,7 +80,7 @@ tasks:
   - id: bq_load_macro
     type: io.kestra.plugin.gcp.bigquery.LoadFromGcs
     from:
-      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
+      - "gs://{{kv('GCP_BUCKET_NAME')}}/raw/macro/{{trigger.date ?? execution.startDate | date('yyyy-MM-dd')}}/macro_data.csv"
     destinationTable: "{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_MACRO_DATASET')}}.macro_data"
     format: CSV
     csvOptions:
