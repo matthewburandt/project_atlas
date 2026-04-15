@@ -53,6 +53,27 @@ Raw data lands in GCS, gets loaded into BigQuery's raw layer, and is transformed
 
 ---
 
+## Cloud & Infrastructure
+
+Project Atlas runs entirely on Google Cloud Platform (GCP). All cloud resources 
+are provisioned automatically via code — no manual console setup is required.
+
+**Resource provisioning** is handled by the `atlas_gcp_setup` Kestra flow, which 
+creates the GCS bucket and BigQuery datasets (`fund_data`, `macro_data`) on first 
+run. Table schemas and partitioning are defined as DDL within the ingestion flows 
+themselves, meaning the full data infrastructure is created automatically on the 
+first pipeline execution.
+
+**Services used:**
+- Google Cloud Storage — raw data lake (CSV landing zone for ETF and macro data)
+- BigQuery — data warehouse (raw ingestion target + analytical layer via dbt)
+- GCP VM *(planned)* — always-on Kestra deployment for scheduled execution
+
+All infrastructure definitions live in the Kestra flow YAMLs under `flows/` in 
+this repository, version-controlled alongside the pipeline and transformation code.
+
+---
+
 ## Pipeline Walkthrough
 
 ### Ingestion
@@ -64,6 +85,15 @@ Two Kestra flows run on schedule:
 **`atlas_macro_ingestion`** runs monthly on the 1st. It fetches seven macroeconomic series from the FRED API — yield curve spread (T10Y2Y), Fed Funds Rate, CPI, unemployment, high-yield credit spread, VIX, and 10-year inflation expectations — writes a CSV to GCS under `raw/macro/`, and loads into BigQuery similarly.
 
 Both flows use Kestra's secret store for API credentials and KV pairs for project configuration.
+
+Here is a screenshot of the Kestra topology for the ingestion of ETF daily returns from yfinance
+![Kestra Topology](assets/Kestra DAG.png)
+
+Here is a screenshot of successul backfilling runs (those occurring 4/12/2026) and current runs (those on/after 4/13/2026)
+![Kestra Runs](assets/Successful Kestra runs.png)
+
+Here is a screenshot of the data once Kestra has successfully loaded it into Big Query
+![Google BigQuery](assets/Successful load of data into Big Query.png)
 
 ### Transformation
 
@@ -79,6 +109,9 @@ dbt Cloud handles all transformation logic in two layers:
 - `mart_etf_features` — wide table with daily returns, rolling volatility, and momentum for each ETF
 - `mart_etf_daily_returns` — long-format table (one row per trade date + ticker) produced by unpivoting the wide ETF returns columns; used directly by the dashboard scatter plot
 
+Here is a successful build of various dbt models and corresponding data quality tests
+![dbt runs & tests](assets/dbt Successful build w tests.png)
+
 ### Dashboard
 
 Looker Studio connects directly to BigQuery and surfaces three visualizations:
@@ -91,7 +124,7 @@ Looker Studio connects directly to BigQuery and surfaces three visualizations:
 
 ## Dashboard
 
-> _Link to be added after deployment_
+[> Project Atlas](https://datastudio.google.com/reporting/19612fad-8c03-4d0e-9f8f-088b0c393b70)
 
 ---
 
@@ -129,18 +162,20 @@ Looker Studio connects directly to BigQuery and surfaces three visualizations:
 project-atlas/
 ├── flows/                  # Kestra flow YAMLs (source of truth)
 │   ├── atlas_gcp_setup.yml
-│   ├── atlas_fund_ingestion.yml
-│   ├── atlas_macro_ingestion.yml
-│   └── atlas_backfill.yml
+│   ├── atlas_ingestion.yml
+│   ├── atlas_macro_ingestions.yml
+│   └── atlas_kv.yml
 ├── dbt/
 │   ├── models/
 │   │   ├── staging/
+│   │   │   ├── sources.yml
 │   │   │   ├── stg_etf_ohlc.sql
 │   │   │   └── stg_macro_data.sql
-│   │   ├── mart/
-│   │   │   ├── mart_etf_features.sql
-│   │   │   └── mart_etf_daily_returns.sql
-│   │   └── sources.yml
+│   │   └── mart/
+│   │       ├── mart_market_features.sql
+│   │       ├── int_fund_daily.sql
+│   │       ├── int_macro_daily.sql
+│   │       └── mart_etf_daily_returns.sql
 │   └── dbt_project.yml
 ├── docker-compose.yml
 ├── .env.example
