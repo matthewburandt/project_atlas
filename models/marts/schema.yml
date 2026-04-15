@@ -1,0 +1,15 @@
+models:
+  - name: mart_etf_daily_returns
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+      - name: ticker
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['SPY', 'QQQ', 'TLT', 'GLD', 'HYG']
+      - name: daily_return_pct
+        tests:
+          - not_null

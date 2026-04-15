@@ -1,0 +1,7 @@
+models:
+  - name: stg_macro_data
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+          - unique
