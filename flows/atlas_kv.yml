@@ -6,7 +6,7 @@ tasks:
     type: io.kestra.plugin.core.kv.Set
     key: GCP_PROJECT_ID
     kvType: STRING
-    value: project-atlas-491202 # TODO replace with your project id
+    value: project-atlas-491202
 
   - id: gcp_location
     type: io.kestra.plugin.core.kv.Set
@@ -18,7 +18,7 @@ tasks:
     type: io.kestra.plugin.core.kv.Set
     key: GCP_BUCKET_NAME
     kvType: STRING
-    value:  project_atlas_funds_data # TODO make sure it's globally unique!
+    value:  project_atlas_funds_data
 
   - id: gcp_dataset
     type: io.kestra.plugin.core.kv.Set
@@ -36,4 +36,4 @@ tasks:
     type: io.kestra.plugin.core.kv.Set
     key: FRED_API_KEY
     kvType: STRING
-    value: d1a4e88cb84c34808b5c07e2e62b61ec # TODO replace with your actual FRED API key
+    value: d1a4e88cb84c34808b5c07e2e62b61ec  # Replace with your actual FRED API key

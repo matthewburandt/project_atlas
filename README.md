@@ -62,7 +62,8 @@ are provisioned automatically via code — no manual console setup is required.
 creates the GCS bucket and BigQuery datasets (`fund_data`, `macro_data`) on first 
 run. Table schemas and partitioning are defined as DDL within the ingestion flows 
 themselves, meaning the full data infrastructure is created automatically on the 
-first pipeline execution.
+first pipeline execution. There is no need for the user to manually create any 
+GCS Buckets or BQ tables :)
 
 **Services used:**
 - Google Cloud Storage — raw data lake (CSV landing zone for ETF and macro data)
@@ -72,6 +73,10 @@ first pipeline execution.
 All infrastructure definitions live in the Kestra flow YAMLs under `flows/` in 
 this repository, version-controlled alongside the pipeline and transformation code.
 
+## Partitioning & Clustering
+
+Both raw BigQuery tables are partitioned by trade_date. Time-series financial data is almost always queried by date range — filtering to a specific week, month, or backfill window — so partitioning on the date column lets BigQuery skip scanning irrelevant partitions entirely.
+
 ---
 
 ## Pipeline Walkthrough
@@ -80,20 +85,22 @@ this repository, version-controlled alongside the pipeline and transformation co
 
 Two Kestra flows run on schedule:
 
-**`atlas_fund_ingestion`** runs daily. It pulls OHLC price data for five ETFs (SPY, QQQ, TLT, GLD, HYG) via yfinance, writes a CSV to GCS under `raw/fund_data/`, creates the BigQuery target table if it doesn't exist, and loads the data with `WRITE_APPEND`.
+**`atlas_fund_ingestion`** runs every Monday and Thursday at 4 PM. It pulls OHLC price data for five ETFs (SPY, QQQ, TLT, GLD, HYG) via yfinance, writes a CSV to GCS under `raw/etf/`, creates the BigQuery target table if it doesn't exist, and loads the data with `WRITE_APPEND`. Each table is stored under a dated folder with the execution date
+as the title and one csv inside 'etf_history.csv' which is the output of a python call
+using yfinance
 
-**`atlas_macro_ingestion`** runs monthly on the 1st. It fetches seven macroeconomic series from the FRED API — yield curve spread (T10Y2Y), Fed Funds Rate, CPI, unemployment, high-yield credit spread, VIX, and 10-year inflation expectations — writes a CSV to GCS under `raw/macro/`, and loads into BigQuery similarly.
+**`atlas_macro_ingestion`** runs monthly on the 1st at 9am. It fetches seven macroeconomic series from the FRED API — yield curve spread/difference between 2Y treasury security and 10Y treasury security, Fed Funds Rate, CPI, unemployment, high-yield credit spread, VIX, and 10-year inflation expectations — writes a CSV to GCS under `raw/macro/`, and loads into BigQuery similarly. This data also goes into a dated folder with the date of execution as the name of the folder. Inside each folder is a csv titled 'macro_data.csv'
 
 Both flows use Kestra's secret store for API credentials and KV pairs for project configuration.
 
 Here is a screenshot of the Kestra topology for the ingestion of ETF daily returns from yfinance
-![Kestra Topology](assets/Kestra DAG.png)
+![Kestra Topology](assets/Kestra_DAG.png)
 
 Here is a screenshot of successul backfilling runs (those occurring 4/12/2026) and current runs (those on/after 4/13/2026)
-![Kestra Runs](assets/Successful Kestra runs.png)
+![Kestra Runs](assets/Successful_Kestra_runs.png)
 
 Here is a screenshot of the data once Kestra has successfully loaded it into Big Query
-![Google BigQuery](assets/Successful load of data into Big Query.png)
+![Google BigQuery](assets/Successful_load_of_data_into_Big_Query.png)
 
 ### Transformation
 
@@ -110,7 +117,7 @@ dbt Cloud handles all transformation logic in two layers:
 - `mart_etf_daily_returns` — long-format table (one row per trade date + ticker) produced by unpivoting the wide ETF returns columns; used directly by the dashboard scatter plot
 
 Here is a successful build of various dbt models and corresponding data quality tests
-![dbt runs & tests](assets/dbt Successful build w tests.png)
+![dbt runs & tests](assets/dbt_successful_build_w_tests.png)
 
 ### Dashboard
 
@@ -142,15 +149,15 @@ Looker Studio connects directly to BigQuery and surfaces three visualizations:
 
 1. Clone this repo
 2. Add your GCP service account JSON to the repo root — it is `.gitignore`d
-3. Copy `.env.example` to `.env` and fill in your project values
+3. Copy `.env.example` to `.env_encoded` and fill in your project values. This is the filename the Docker Compose file expects for passing secrets to Kestra.
 4. Start Kestra: `docker compose up -d`
 5. In the Kestra UI, create a namespace `atlas` and set the following KV pairs:
    - `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GCP_LOCATION`, `GCP_FUND_DATASET`, `GCP_MACRO_DATASET`
 6. Add your service account JSON as a Kestra secret: `GCP_SERVICE_ACCOUNT`
 7. Add your FRED API key as a Kestra secret: `FRED_API_KEY`
 8. Upload the flows from `flows/` to the Kestra UI
-9. Trigger backfill flows manually to seed historical data
-10. In dbt Cloud, connect to `project-atlas-491202` and point to this repo
+9. Trigger backfills starting on whatever preferred past date you want. Do so through the Kestra backfill option on your flows once you've saved them.
+10. In dbt Cloud, create a new project connected to your own GCP project and BigQuery instance. Point the project repository to this repo and set the project subdirectory to `dbt/`.
 11. Run `dbt build` to materialize all models
 12. Connect Looker Studio to BigQuery and point to the mart models
 
